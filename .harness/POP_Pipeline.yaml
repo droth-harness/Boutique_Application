@@ -1,0 +1,1786 @@
+pipeline:
+  name: POP Pipeline
+  identifier: POP_Pipeline
+  orgIdentifier: demo
+  projectIdentifier: Platform_Engineering
+  description: Power of the Platform
+  tags:
+    owner: DemoCommittee
+    iacmManaged: "true"
+  properties:
+    ci:
+      codebase:
+        repoName: org.Boutique_Application
+        build: <+input>
+        sparseCheckout: []
+  stages:
+    - stage:
+        name: Build - Test - Push
+        identifier: Build_Test_Push
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths: []
+          execution:
+            steps:
+              - stepGroup:
+                  name: SCA
+                  identifier: SCA
+                  steps:
+                    - parallel:
+                        - step:
+                            type: BlackDuck
+                            name: BlackDuck
+                            identifier: BlackDuck
+                            spec:
+                              mode: ingestion
+                              config: default
+                              target:
+                                type: repository
+                                detection: manual
+                                name: seworkshop/boutique-pmservice
+                                variant: active_cves_<+pipeline.sequenceId>
+                              advanced:
+                                log:
+                                  level: info
+                              ingestion:
+                                file: sto_tests/scan_tools/blackduckhub/test_data/001
+                            when:
+                              stageStatus: Success
+                              condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: MarkAsSuccess
+                        - step:
+                            type: Snyk
+                            name: Snyk SCA
+                            identifier: Snyk_SCA
+                            spec:
+                              mode: ingestion
+                              config: default
+                              target:
+                                type: repository
+                                detection: manual
+                                name: seworkshop/boutique-pmservice
+                                variant: main
+                              advanced:
+                                log:
+                                  level: info
+                              ingestion:
+                                file: sto_tests/scan_tools/snyk/test_data/002
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Run
+                  name: Build Intelligence
+                  identifier: Build_Gradle_App
+                  spec:
+                    shell: Sh
+                    command: |-
+                      #gradle build --build-cache -x test -x rat -Dgradle.user.home=/harness/.gradle
+                      gradle build --build-cache -x test -x rat -PmaxParallelForks=32 -PignoreFailures=true --profile -x checkstyleTest
+
+
+                      touch release-notes.txt
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: Test
+                  name: Test Intelligence
+                  identifier: Test_Intelligence
+                  spec:
+                    shell: Sh
+                    command: "gradle unitTest -PmaxParallelForks=32 -PignoreFailures=true "
+                    reports:
+                      type: JUnit
+                      spec:
+                        paths:
+                          - "**/*.xml"
+                    intelligenceMode: true
+              - stepGroup:
+                  name: SAST
+                  identifier: SAST
+                  steps:
+                    - parallel:
+                        - step:
+                            type: Snyk
+                            name: Snyk SAST
+                            identifier: Snyk_SAST
+                            spec:
+                              mode: ingestion
+                              config: default
+                              target:
+                                type: repository
+                                name: seworkshop/boutique-pmservice
+                                variant: main
+                              advanced:
+                                log:
+                                  level: info
+                                fail_on_severity: none
+                              ingestion:
+                                file: sto_tests/scan_tools/snyk/test_data/001
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: MarkAsSuccess
+                        - step:
+                            type: Sonarqube
+                            name: SonarQube SAST
+                            identifier: SonarQube_SAST
+                            spec:
+                              mode: ingestion
+                              config: default
+                              target:
+                                type: repository
+                                name: seworkshop/boutique-pmservice
+                                variant: main
+                              advanced:
+                                log:
+                                  level: info
+                              ingestion:
+                                file: sto_tests/scan_tools/sonarqube/test_data/001
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Wiz
+                            name: Wiz
+                            identifier: Wiz
+                            spec:
+                              mode: orchestration
+                              config: wiz-directory
+                              target:
+                                type: repository
+                                detection: auto
+                              advanced:
+                                log:
+                                  level: info
+                              auth:
+                                access_token: <+secrets.getValue("account.wiz_access_token")>
+                                access_id: <+secrets.getValue("account.wiz_access_id")>
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Push Artifact
+                  identifier: Push_Artifact
+                  spec:
+                    caching: true
+                    optimize: true
+                    remoteCacheRepo: seworkshop/jhttp_cache_repo
+                    connectorRef: account.harnessImageV1
+                    repo: seworkshop/kafka-test
+                    tags:
+                      - 1.<+pipeline.sequenceId>
+              - parallel:
+                  - step:
+                      type: SscaOrchestration
+                      name: SBOM Generation
+                      identifier: SBOM_Generation
+                      spec:
+                        mode: generation
+                        tool:
+                          type: Syft
+                          spec:
+                            format: spdx-json
+                        source:
+                          type: docker
+                          spec:
+                            connector: account.harnessImage
+                            image: seworkshop/kafka-test:1.<+pipeline.sequenceId>
+                        attestation:
+                          type: cosign
+                          spec:
+                            privateKey: Platform_Demo_Cosign_Key
+                            password: Platform_Demo_Cosign_Password
+                        sbom_drift:
+                          base: last_generated_sbom
+                        resources:
+                          limits:
+                            memory: 500Mi
+                            cpu: "0.5"
+                      when:
+                        stageStatus: Success
+                  - step:
+                      type: Plugin
+                      name: Publish Release Notes
+                      identifier: Publish_Release_Notes
+                      spec:
+                        connectorRef: account.harnessImage
+                        image: plugins/artifact-metadata-publisher
+                        settings:
+                          file_urls: https://harness.io/notes.html
+                          artifact_file: release-notes.txt
+              - stepGroup:
+                  name: Image Scan
+                  identifier: Image_Scan
+                  steps:
+                    - parallel:
+                        - step:
+                            type: Security
+                            name: JFrog Xray
+                            identifier: JFrog_Xray
+                            spec:
+                              privileged: true
+                              settings:
+                                policy_type: ingestionOnly
+                                scan_type: containerImage
+                                product_name: xray
+                                product_config_name: default
+                                customer_artifacts_path: sto_tests/scan_tools/xray/test_data
+                                manual_upload_filename: "001"
+                                container_project: seworkshop/boutique-pmservice
+                                container_tag: "1.18"
+                            when:
+                              stageStatus: Success
+                              condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                        - step:
+                            type: AquaTrivy
+                            name: Aqua Trivy
+                            identifier: Aqua_Trivy
+                            spec:
+                              mode: ingestion
+                              config: default
+                              target:
+                                type: container
+                                name: seworkshop/boutique-pmservice
+                                variant: local
+                              advanced:
+                                log:
+                                  level: info
+                              privileged: false
+                              ingestion:
+                                file: sto_tests/scan_tools/aqua_trivy/test_data/005
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Wiz
+                            name: Wiz - Container
+                            identifier: Wiz_Container
+                            spec:
+                              mode: orchestration
+                              config: wiz-container-images
+                              target:
+                                type: container
+                                detection: auto
+                              advanced:
+                                log:
+                                  level: info
+                              privileged: true
+                              image:
+                                type: docker_v2
+                                name: seworkshop/kafka-test
+                                tag: 1.<+pipeline.sequenceId>
+                              auth:
+                                access_token: <+secrets.getValue("account.wiz_access_token")>
+                                access_id: <+secrets.getValue("account.wiz_access_id")>
+                            when:
+                              stageStatus: Success
+                  when:
+                    stageStatus: Success
+                  spec: {}
+              - step:
+                  type: Run
+                  name: PR Status Checks
+                  identifier: PR_Status_Updates
+                  spec:
+                    shell: Sh
+                    command: |-
+                      RAW_REPO_NAME="<+pipeline.properties.ci.codebase.repoName>"
+                      REPO_NAME="${RAW_REPO_NAME##*.}"
+                      ##SAST Status Check
+                      curl -i -X PUT \
+                        "https://app.harness.io/gateway/code/api/v1/repos/${REPO_NAME}/+/checks/commits/<+codebase.commitSha>?accountIdentifier=<+account.identifier>&orgIdentifier=<+org.identifier>" \
+                        -H 'Content-Type: application/json' \
+                        -H 'x-api-key: <+secrets.getValue("account.HCR-AccountLevel_API_Key")>' \
+                        -d '{
+                          "ended": 0,
+                          "identifier": "harness-ci-sastscans",
+                          "link": "https://app.harness.io/ng/account/<+account.identifier>/module/cd/orgs/<+org.identifier>/projects/<+project.identifier>/pipelines/<+pipeline.identifier>/executions/<+pipeline.executionId>/security",
+                          "payload": {
+                            "data": null,
+                            "kind": "",
+                            "version": "1.0"
+                          },
+                          "started": 0,
+                          "status": "success",
+                          "summary": "Snyk SAST and SonarQube SAST gates"
+                        }'
+
+                      ##ImageScan Status Check
+                      curl -i -X PUT \
+                        "https://app.harness.io/gateway/code/api/v1/repos/${REPO_NAME}/+/checks/commits/<+codebase.commitSha>?accountIdentifier=<+account.identifier>&orgIdentifier=<+org.identifier>" \
+                        -H 'Content-Type: application/json' \
+                        -H 'x-api-key: <+secrets.getValue("account.HCR-AccountLevel_API_Key")>' \
+                        -d '{
+                          "ended": 0,
+                          "identifier": "harness-ci-imagescans",
+                          "link": "https://app.harness.io/ng/account/<+account.identifier>/module/cd/orgs/<+org.identifier>/projects/<+project.identifier>/pipelines/<+pipeline.identifier>/executions/<+pipeline.executionId>/security",
+                          "payload": {
+                            "data": null,
+                            "kind": "",
+                            "version": "1.0"
+                          },
+                          "started": 0,
+                          "status": "success",
+                          "summary": "Aqua Trivy and JFrog Xray gates"
+                          }'
+
+
+                      ##SCA Status Check
+                      curl -i -X PUT \
+                        "https://app.harness.io/gateway/code/api/v1/repos/${REPO_NAME}/+/checks/commits/<+codebase.commitSha>?accountIdentifier=<+account.identifier>&orgIdentifier=<+org.identifier>" \
+                        -H 'Content-Type: application/json' \
+                        -H 'x-api-key: <+secrets.getValue("account.HCR-AccountLevel_API_Key")>' \
+                        -d '{
+                          "ended": 0,
+                          "identifier": "harness-ci-sca",
+                          "link": "https://app.harness.io/ng/account/<+account.identifier>/module/cd/orgs/<+org.identifier>/projects/<+project.identifier>/pipelines/<+pipeline.identifier>/executions/<+pipeline.executionId>/security",
+                          "payload": {
+                            "data": null,
+                            "kind": "",
+                            "version": "1.0"
+                          },
+                          "started": 0,
+                          "status": "success",
+                          "summary": "BlackDuck and Snyk Gates"
+                          }'
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+          sharedPaths:
+            - /var/run
+            - /root/.m2
+            - /opt/
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          slsa_provenance:
+            enabled: true
+            attestation:
+              type: cosign
+              spec:
+                private_key: Platform_Demo_Cosign_Key
+                password: Platform_Demo_Cosign_Password
+    - stage:
+        name: Dev Cluster Up
+        identifier: Dev_Cluster_Up
+        description: ""
+        type: IACM
+        spec:
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          workspace: <+stage.variables.workspace>
+          execution:
+            steps:
+              - step:
+                  type: IACMTerraformPlugin
+                  name: init
+                  identifier: init
+                  timeout: 10m
+                  spec:
+                    command: init
+              - step:
+                  type: IACMTerraformPlugin
+                  name: plan
+                  identifier: plan
+                  timeout: 10m
+                  spec:
+                    command: plan
+              - step:
+                  type: Wiz
+                  spec:
+                    mode: orchestration
+                    config: wiz-iac-templates
+                    target:
+                      type: repository
+                      workspace: /harness/iacm-gke
+                      detection: auto
+                    advanced:
+                      log:
+                        level: info
+                    auth:
+                      access_token: <+secrets.getValue("account.wiz_access_token")>
+                      access_id: <+secrets.getValue("account.wiz_access_id")>
+                  name: Wiz IaC
+                  identifier: Wiz_IaC
+              - step:
+                  type: IACMApproval
+                  name: IACM Approval
+                  identifier: IACM_Approval
+                  spec:
+                    autoApprove: true
+                  timeout: 1h
+              - step:
+                  type: IACMTerraformPlugin
+                  name: apply
+                  identifier: apply
+                  timeout: 10m
+                  spec:
+                    command: apply
+                  when:
+                    condition: "false"
+                    stageStatus: Success
+        tags: {}
+        variables:
+          - name: workspace
+            type: String
+            description: ""
+            required: false
+            value: Boutique_Application_POP
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsSuccess
+    - stage:
+        name: Deploy to Dev
+        identifier: Deploy_to_Dev
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: org.Boutique_Frontend
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources: <+input>
+          environment:
+            environmentRef: org.dev
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: boutiquedev
+          execution:
+            steps:
+              - stepGroup:
+                  steps:
+                    - step:
+                        type: SscaEnforcement
+                        name: SBOM Policy Enforcement
+                        identifier: SBOM_Policy_Enforcement
+                        spec:
+                          source:
+                            type: image
+                            spec:
+                              connector: account.harnessImage
+                              image: seworkshop/kafka-test:1.<+pipeline.sequenceId>
+                          verifyAttestation:
+                            type: cosign
+                            spec:
+                              publicKey: Platform_Demo_Cosign_Pub
+                          policy:
+                            policySets:
+                              - SBOM_Policies
+                          resources:
+                            limits:
+                              memory: 500Mi
+                              cpu: "0.5"
+                    - step:
+                        type: SlsaVerification
+                        name: SLSA Verification
+                        identifier: SLSA_Verification
+                        spec:
+                          source:
+                            type: Docker
+                            spec:
+                              connector: account.harnessImage
+                              image_path: seworkshop/kafka-test
+                              tag: 1.<+pipeline.sequenceId>
+                          verify_attestation:
+                            type: cosign
+                            spec:
+                              public_key: Platform_Demo_Cosign_Pub
+                        enforce:
+                          policySets:
+                            - SLSA_Verification
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+                      namespace: build
+                  stageType: Deployment
+                  name: SSCA and SLSA Verification
+                  identifier: SSCA_and_SLSA_Verification
+              - stepGroup:
+                  name: Terraform Plan and Apply
+                  identifier: Terraform_Plan_and_Apply
+                  steps:
+                    - parallel:
+                        - step:
+                            type: TerraformPlan
+                            name: TF Plan AWS
+                            identifier: TF_Plan_S3
+                            spec:
+                              configuration:
+                                command: Apply
+                                configFiles:
+                                  store:
+                                    type: Github
+                                    spec:
+                                      gitFetchType: Branch
+                                      connectorRef: account.Github
+                                      repoName: terraform_scripts
+                                      branch: main
+                                      folderPath: terraform/aws
+                                secretManagerRef: harnessSecretManager
+                                varFiles:
+                                  - varFile:
+                                      identifier: terraform.tfvars
+                                      spec:
+                                        content: |-
+                                          aws_region = "us-east-1"
+                                          access_key = "<+secrets.getValue("account.POP_TF_AWS_Access_Key")>"
+                                          secret_key = "<+secrets.getValue("account.POP_TF_AWS_Secret_Access_Key")>"
+                                          bucket_name = "pop-demo-<+pipeline.sequenceId>"
+                                      type: Inline
+                              provisionerIdentifier: popaws
+                            timeout: 10m
+                            failureStrategies: []
+                        - step:
+                            type: TerraformPlan
+                            name: TF Plan Az
+                            identifier: TF_Plan_Blob
+                            spec:
+                              configuration:
+                                command: Apply
+                                configFiles:
+                                  store:
+                                    type: Github
+                                    spec:
+                                      gitFetchType: Branch
+                                      connectorRef: account.Github
+                                      repoName: terraform_scripts
+                                      branch: main
+                                      folderPath: terraform/azure
+                                secretManagerRef: harnessSecretManager
+                                varFiles:
+                                  - varFile:
+                                      identifier: terraform.tfvars
+                                      spec:
+                                        content: |-
+                                          tenant_id = "<+secrets.getValue("account.POP_TF_AZ_Tenant_Id")>"
+                                          subscription_id = "<+secrets.getValue("account.POP_TF_AZ_Subscription_Id")>"
+                                          client_id = "<+secrets.getValue("account.POP_TF_AZ_Client_Id")>"
+                                          client_secret = "<+secrets.getValue("account.POP_TF_AZ_Client_Secret")>"
+                                      type: Inline
+                              provisionerIdentifier: popaz
+                            timeout: 10m
+                            failureStrategies: []
+                    - parallel:
+                        - step:
+                            type: TerraformApply
+                            name: TF Apply AWS
+                            identifier: TF_Apply_S3
+                            spec:
+                              provisionerIdentifier: popaws
+                              configuration:
+                                type: InheritFromPlan
+                            timeout: 10m
+                            when:
+                              stageStatus: Success
+                            failureStrategies: []
+                        - step:
+                            type: TerraformApply
+                            name: TF Apply Az
+                            identifier: TF_Apply_AzBlob
+                            spec:
+                              provisionerIdentifier: popaz
+                              configuration:
+                                type: InheritFromPlan
+                            timeout: 10m
+                            failureStrategies: []
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+                  spec: {}
+                  when:
+                    stageStatus: Success
+                    condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+              - parallel:
+                  - step:
+                      type: JiraCreate
+                      name: Jira - Create Ticket
+                      identifier: Open_Jira_Ticket
+                      spec:
+                        connectorRef: account.Harness_JIRA
+                        projectKey: HD
+                        issueType: Story
+                        fields:
+                          - name: Description
+                            value: "Promote <+service.name> to production \\\\ Pipeline Name: <+pipeline.name> \\\\ Artifact: <+artifact.image> \\\\ Deployment URL: https://app.harness.io/ng/#/account/<+account.identifier>/cd/<+org.name>/default/projects/<+project.name>/pipelines/CD_Pipeline/executions/<+pipeline.executionId>/pipeline \\\\ Harness executionId: <+pipeline.executionId> \\\\ Harness sequenceId: <+pipeline.sequenceId> \\\\  PR requested by GH_User: <+pipeline.variables.ghusername>"
+                          - name: Summary
+                            value: Ticket to Track deployment
+                      timeout: 1d
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                      failureStrategies: []
+                  - step:
+                      type: ServiceNowCreate
+                      name: ServiceNow - Create Ticket
+                      identifier: ServiceNow_Create_Ticket
+                      spec:
+                        connectorRef: account.ServiceNow_Dev
+                        ticketType: change_request
+                        fields:
+                          - name: description
+                            value: "Promote <+service.name> to production \\\\ Pipeline Name: <+pipeline.name> \\\\ Service Name: <+pipeline.variables.serviceName> \\\\ Deployment URL: https://app.harness.io/ng/#/account/<+account.identifier>/cd/<+org.name>/default/projects/<+project.name>/pipelines/CD_Pipeline/executions/<+pipeline.executionId>/pipeline \\\\ Harness executionId: <+pipeline.executionId> \\\\ Harness sequenceId: <+pipeline.sequenceId> \\\\  PR requested by GH_User: <+pipeline.variables.ghusername>"
+                          - name: short_description
+                            value: Begin promotion of <+service.name> to production
+                        createType: Normal
+                      timeout: 1d
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: Ignore
+              - step:
+                  type: ShellScript
+                  name: Check Provenance
+                  identifier: checkProvenance
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: echo "checking shas...."
+                    environmentVariables: []
+                    outputVariables: []
+                  timeout: 10m
+                  when:
+                    stageStatus: Success
+                    condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                  failureStrategies: []
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaApply
+                        name: DB Schema Apply
+                        identifier: DB_Schema_Apply
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_Dev
+                          tag: 224ee5d1a00262b89a76840e516925ef5c8f90bb
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+              - step:
+                  name: Rollout Deployment
+                  identifier: rolloutDeployment
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                  when:
+                    stageStatus: Success
+                  failureStrategies: []
+              - parallel:
+                  - step:
+                      type: JiraUpdate
+                      name: Update Jira
+                      identifier: Update_JIRA
+                      spec:
+                        connectorRef: account.Harness_JIRA
+                        issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                        fields:
+                          - name: Comment
+                            value: Succesfully Passed "CheckProvenance"
+                      timeout: 1d
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                      failureStrategies: []
+                  - step:
+                      type: ServiceNowUpdate
+                      name: ServiceNow - Update Ticket
+                      identifier: ServiceNow_Update_Ticket
+                      spec:
+                        useServiceNowTemplate: false
+                        connectorRef: account.ServiceNow_Dev
+                        ticketType: change_request
+                        ticketNumber: <+execution.steps.ServiceNow_Create_Ticket.ticket.ticketNumber>
+                        fields:
+                          - name: description
+                            value: "Promote <+service.name> to production \\\\ Pipeline Name: <+pipeline.name> \\\\ Service Name: <+pipeline.variables.serviceName> \\\\ Deployment URL: https://app.harness.io/ng/#/account/<+account.identifier>/cd/<+org.name>/default/projects/<+project.name>/pipelines/CD_Pipeline/executions/<+pipeline.executionId>/pipeline \\\\ Harness executionId: <+pipeline.executionId> \\\\ Harness sequenceId: <+pipeline.sequenceId> \\\\  PR requested by GH_User: <+pipeline.variables.ghusername>"
+                          - name: short_description
+                            value: Begin promotion of <+service.name> to production \\ Dev Deployment was successful (/)
+                      timeout: 1d
+                      when:
+                        stageStatus: Success
+                        condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: Ignore
+                  - step:
+                      type: ShellScript
+                      name: Access to Deployment
+                      identifier: Access_to_Deployment
+                      spec:
+                        shell: Bash
+                        onDelegate: true
+                        source:
+                          type: Inline
+                          spec:
+                            script: |
+                              frontend=$(kubectl get service frontend-pop -n boutique-dev | awk '{print $4}' | xargs | awk '{print $2}')
+                              grafana=$(kubectl get service grafana-svc -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                              prom=$(kubectl get service prometheus-k8s -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                              frontend="http://"$frontend
+                              grafana="http://"$grafana":3000"
+                              prom="http://"$prom":9090"
+
+
+                              echo "Boutique URL:" $frontend
+                              echo "Grafana URL: "$grafana
+                              echo "Prometheus URL: "$prom
+                        environmentVariables: []
+                        outputVariables:
+                          - name: boutique_dev_url
+                            type: String
+                            value: frontend
+                          - name: prometheus_url
+                            type: String
+                            value: prom
+                          - name: grafana_url
+                            type: String
+                            value: grafana
+                      timeout: 10m
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: MarkAsSuccess
+              - step:
+                  type: K8sApply
+                  name: CCM - AutoStopping Rule
+                  identifier: CCM_AutoStopping_Rule
+                  spec:
+                    filePaths:
+                      - k8s_manifest/autostoppingrule.yaml
+                    skipDryRun: false
+                    skipSteadyStateCheck: false
+                    overrides: []
+                    skipRendering: false
+                  timeout: 10m
+                  when:
+                    stageStatus: All
+                    condition: "false"
+            rollbackSteps:
+              - step:
+                  name: Rollback Rollout Deployment
+                  identifier: rollbackRolloutDeployment
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec: {}
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaRollback
+                        name: DB Schema Rollback
+                        identifier: DB_Schema_Rollback
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_Dev
+                          tag: df23247d03fcc6953bc8511d064f8cec23c7a333
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+    - stage:
+        name: Deploy to QA
+        identifier: Deploy_to_QA
+        description: ""
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          environment:
+            environmentRef: org.qa
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: boutiqueqa
+          execution:
+            steps:
+              - stepGroup:
+                  steps:
+                    - step:
+                        type: SscaEnforcement
+                        name: SBOM Policy Enforcement
+                        identifier: SBOM_Policy_Enforcement
+                        spec:
+                          source:
+                            type: image
+                            spec:
+                              connector: account.harnessImage
+                              image: seworkshop/kafka-test:1.<+pipeline.sequenceId>
+                          verifyAttestation:
+                            type: cosign
+                            spec:
+                              publicKey: Platform_Demo_Cosign_Pub
+                          policy:
+                            policySets:
+                              - SBOM_Policies
+                          resources:
+                            limits:
+                              memory: 500Mi
+                              cpu: "0.5"
+                    - step:
+                        type: SlsaVerification
+                        name: SLSA Verification
+                        identifier: SLSA_Verification
+                        spec:
+                          source:
+                            type: Docker
+                            spec:
+                              connector: account.harnessImage
+                              image_path: seworkshop/kafka-test
+                              tag: 1.<+pipeline.sequenceId>
+                          verify_attestation:
+                            type: cosign
+                            spec:
+                              public_key: Platform_Demo_Cosign_Pub
+                        enforce:
+                          policySets:
+                            - SLSA_Verification
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+                      namespace: build
+                  stageType: Deployment
+                  name: SSCA and SLSA Verification
+                  identifier: SSCA_and_SLSA_Verification
+              - step:
+                  type: JiraUpdate
+                  name: Update Jira
+                  identifier: Update_JIRA
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    fields: []
+                  timeout: 1d
+                  when:
+                    stageStatus: Success
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaApply
+                        name: DB Schema Apply
+                        identifier: DB_Schema_Apply
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_QA
+                          tag: 224ee5d1a00262b89a76840e516925ef5c8f90bb
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+              - stepGroup:
+                  name: Blue-Green Deployment
+                  identifier: BlueGreen_Deployment
+                  steps:
+                    - step:
+                        name: Stage Deployment
+                        identifier: stageDeployment
+                        type: K8sBlueGreenDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                          pruningEnabled: false
+                    - parallel:
+                        - step:
+                            type: ShellScript
+                            name: Regression Tests
+                            identifier: Regression_Tests
+                            spec:
+                              shell: Bash
+                              onDelegate: true
+                              source:
+                                type: Inline
+                                spec:
+                                  script: echo "Regression Tests"
+                              environmentVariables: []
+                              outputVariables: []
+                              executionTarget: {}
+                            timeout: 10m
+                        - step:
+                            type: ShellScript
+                            name: JMeter
+                            identifier: JMeter
+                            spec:
+                              shell: Bash
+                              onDelegate: true
+                              source:
+                                type: Inline
+                                spec:
+                                  script: echo "JMeter"
+                              environmentVariables: []
+                              outputVariables: []
+                              executionTarget: {}
+                            timeout: 10m
+                        - step:
+                            type: ShellScript
+                            name: Selenium
+                            identifier: Selenium
+                            spec:
+                              shell: Bash
+                              onDelegate: true
+                              source:
+                                type: Inline
+                                spec:
+                                  script: echo "Selenium"
+                              environmentVariables: []
+                              outputVariables: []
+                              executionTarget: {}
+                            timeout: 10m
+                    - step:
+                        name: Swap primary with stage service
+                        identifier: bgSwapServices
+                        type: K8sBGSwapServices
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+              - parallel:
+                  - step:
+                      type: Chaos
+                      name: Redis Cart - CPU
+                      identifier: Redis_Cart_CPU
+                      spec:
+                        experimentRef: ac9cb896-d50e-494f-a54d-ae2869efebc3
+                        expectedResilienceScore: 80
+                  - step:
+                      type: Chaos
+                      name: Product Catalog - Latency
+                      identifier: Product_Catalog_Latency
+                      spec:
+                        experimentRef: 65122a23-f4c3-48fb-8690-aaf65479f600
+                        expectedResilienceScore: 80
+                  - step:
+                      type: Chaos
+                      name: Frontend - Memory
+                      identifier: Frontend_Memory
+                      spec:
+                        experimentRef: 2db76216-6614-4fb6-980e-f3066f16fab4
+                        expectedResilienceScore: 80
+                  - step:
+                      type: Chaos
+                      name: Checkout - Network Duplication
+                      identifier: Checkout_Network_Duplication
+                      spec:
+                        experimentRef: a7ec025f-3b27-4e3c-98c1-4d7d6c4c4949
+                        expectedResilienceScore: 80
+                  - step:
+                      type: ShellScript
+                      name: Access to Deployment
+                      identifier: Access_to_Deployment
+                      spec:
+                        shell: Bash
+                        onDelegate: true
+                        source:
+                          type: Inline
+                          spec:
+                            script: |
+                              frontend=$(kubectl get service frontend-pop -n boutique-qa | awk '{print $4}' | xargs | awk '{print $2}')
+                              grafana=$(kubectl get service grafana-svc -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                              prom=$(kubectl get service prometheus-k8s -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                              frontend="http://"$frontend
+                              grafana="http://"$grafana":3000"
+                              prom="http://"$prom":9090"
+
+
+                              echo "Boutique URL:" $frontend
+                              echo "Grafana URL: "$grafana
+                              echo "Prometheus URL: "$prom
+                        environmentVariables: []
+                        outputVariables:
+                          - name: boutique_qa_url
+                            type: String
+                            value: frontend
+                          - name: prometheus_url
+                            type: String
+                            value: prom
+                          - name: grafana_url
+                            type: String
+                            value: grafana
+                      timeout: 10m
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - AllErrors
+                            action:
+                              type: MarkAsSuccess
+              - parallel:
+                  - step:
+                      type: K8sApply
+                      name: CCM AutoStopping Rule
+                      identifier: CCM_AutoStopping_Rule
+                      spec:
+                        filePaths:
+                          - k8s_manifest/autostoppingrule.yaml
+                        skipDryRun: false
+                        skipSteadyStateCheck: false
+                        overrides: []
+                      timeout: 10m
+                      when:
+                        stageStatus: Failure
+                      failureStrategies: []
+                  - step:
+                      type: JiraUpdate
+                      name: Update Jira
+                      identifier: Update_Jira
+                      spec:
+                        connectorRef: account.Harness_JIRA
+                        issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                        fields: []
+                      timeout: 1d
+                      when:
+                        stageStatus: Success
+            rollbackSteps:
+              - step:
+                  type: K8sBGSwapServices
+                  name: Swap primary with stage service
+                  identifier: rollbackBgSwapServices
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaRollback
+                        name: DB Schema Rollback
+                        identifier: DB_Schema_Rollback
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_QA
+                          tag: df23247d03fcc6953bc8511d064f8cec23c7a333
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+          service:
+            serviceRef: org.Boutique_Frontend
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources: <+input>
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+        when:
+          pipelineStatus: Success
+          condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+    - stage:
+        name: Approval
+        identifier: Approval
+        description: ""
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  name: Jira Approval
+                  identifier: jiraApproval
+                  type: JiraApproval
+                  timeout: 4h
+                  spec:
+                    approvalCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions:
+                          - key: Status
+                            operator: equals
+                            value: Approved
+                    rejectionCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions: []
+                    connectorRef: account.Harness_JIRA
+                    projectKey: HD
+                    issueType: Story
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - Timeout
+                        action:
+                          type: Ignore
+              - step:
+                  type: ServiceNowApproval
+                  name: ServiceNow Approval
+                  identifier: ServiceNow_Approval
+                  spec:
+                    connectorRef: account.ServiceNow_Dev
+                    ticketType: change_request
+                    approvalCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions:
+                          - key: state
+                            operator: equals
+                            value: Approve
+                    rejectionCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions: []
+                    ticketNumber: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    retryInterval: 1m
+                    changeWindow:
+                      startField: work_start
+                      endField: end_date
+                  timeout: 1d
+                  when:
+                    stageStatus: Failure
+                    condition: <+pipeline.stages.Approval.spec.execution.steps.jiraApproval.spec.approvalCriteria.criteriaSpec.conditions[0].value>=="rejected"
+          serviceDependencies: []
+        tags: {}
+        when:
+          pipelineStatus: Success
+          condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsSuccess
+    - stage:
+        name: Deploy to Prod
+        identifier: Deploy_to_Prod
+        description: Deploy to Production K8S Cluster
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          environment:
+            environmentRef: org.prod
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: boutiqueprod
+          execution:
+            steps:
+              - stepGroup:
+                  steps:
+                    - step:
+                        type: SscaEnforcement
+                        name: SBOM Policy Enforcement
+                        identifier: SBOM_Policy_Enforcement
+                        spec:
+                          source:
+                            type: image
+                            spec:
+                              connector: account.harnessImage
+                              image: seworkshop/kafka-test:1.<+pipeline.sequenceId>
+                          verifyAttestation:
+                            type: cosign
+                            spec:
+                              publicKey: Platform_Demo_Cosign_Pub
+                          policy:
+                            policySets:
+                              - SBOM_Policies
+                          resources:
+                            limits:
+                              memory: 500Mi
+                              cpu: "0.5"
+                    - step:
+                        type: SlsaVerification
+                        name: SLSA Verification
+                        identifier: SLSA_Verification
+                        spec:
+                          source:
+                            type: Docker
+                            spec:
+                              connector: account.harnessImage
+                              image_path: seworkshop/kafka-test
+                              tag: 1.<+pipeline.sequenceId>
+                          verify_attestation:
+                            type: cosign
+                            spec:
+                              public_key: Platform_Demo_Cosign_Pub
+                        enforce:
+                          policySets:
+                            - SLSA_Verification
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+                      namespace: build
+                  stageType: Deployment
+                  name: SSCA and SLSA Verification
+                  identifier: SSCA_and_SLSA_Verification
+              - step:
+                  type: Policy
+                  name: Risk Profile OPA - New Criticals
+                  identifier: Critical_DAST_CVEs_Check
+                  spec:
+                    policySets:
+                      - No_New_Critical_Vulnerabilities
+                    type: Custom
+                    policySpec:
+                      payload: |-
+                        {"SNYK_OSS_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.SCA.steps.SnykSCA.output.outputVariables.CRITICAL>,
+                        "OWASP_OSS_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.SCA.steps.OWASP.output.outputVariables.CRITICAL>,
+                        "SNYK_SAST_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.SAST.steps.Snyk.output.outputVariables.CRITICAL>,
+                        "SQ_SAST_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.SAST.steps.SonarQube_SAST.output.outputVariables.CRITICAL>,
+                        "XRAY_IMAGE_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.Image_Scan.steps.JFrog_Xray.output.outputVariables.CRITICAL>,
+                        "AQUA_IMAGE_NEWCRITICAL": pipeline.stages.Build_Test_Push.spec.execution.steps.Image_Scan.steps.Aqua_Trivy.output.outputVariables.CRITICAL>}
+                  timeout: 10m
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+              - step:
+                  type: JiraUpdate
+                  name: Update Jira
+                  identifier: Update_JIRA
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    fields: []
+                  timeout: 1d
+                  when:
+                    stageStatus: Success
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaApply
+                        name: DB Schema Apply
+                        identifier: DB_Schema_Apply
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_Prod_US
+                          tag: 224ee5d1a00262b89a76840e516925ef5c8f90bb
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+              - stepGroup:
+                  name: Canary Deployment
+                  identifier: canaryDepoyment
+                  steps:
+                    - step:
+                        name: Canary Deployment
+                        identifier: canaryDeployment
+                        type: K8sCanaryDeploy
+                        timeout: 10m
+                        spec:
+                          instanceSelection:
+                            spec:
+                              percentage: 5
+                            type: Percentage
+                          skipDryRun: false
+                    - parallel:
+                        - step:
+                            type: Verify
+                            name: Continuous Verificaiton
+                            identifier: cv_demo
+                            spec:
+                              isMultiServicesOrEnvs: false
+                              type: Rolling
+                              monitoredService:
+                                type: Default
+                                spec: {}
+                              spec:
+                                sensitivity: HIGH
+                                duration: 5m
+                            timeout: 2h
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - Verification
+                                  action:
+                                    type: StageRollback
+                              - onFailure:
+                                  errors:
+                                    - Unknown
+                                  action:
+                                    type: ManualIntervention
+                                    spec:
+                                      timeout: 2h
+                                      onTimeout:
+                                        action:
+                                          type: Ignore
+                        - step:
+                            type: Http
+                            name: Postman HTTP Check
+                            identifier: Postman_HTTP_Check
+                            spec:
+                              url: https://harness.io
+                              method: GET
+                              headers: []
+                              outputVariables: []
+                            timeout: 10s
+                        - step:
+                            type: Chaos
+                            name: Chaos - CPU Hog
+                            identifier: Chaos_CPU_Hog
+                            spec:
+                              experimentRef: 02b373bd-72f4-4db9-aba6-41bf2d70c17a
+                              expectedResilienceScore: 90
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: ShellScript
+                            name: Access to Deployment
+                            identifier: Access_to_Deployment
+                            spec:
+                              shell: Bash
+                              onDelegate: true
+                              source:
+                                type: Inline
+                                spec:
+                                  script: |
+                                    frontend=$(kubectl get service frontend-pop -n boutique-prod | awk '{print $4}' | xargs | awk '{print $2}')
+                                    grafana=$(kubectl get service grafana-svc -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                                    prom=$(kubectl get service prometheus-k8s -n monitoring | awk '{print $4}' | xargs | awk '{print $2}')
+                                    frontend="http://"$frontend
+                                    grafana="http://"$grafana":3000"
+                                    prom="http://"$prom":9090"
+
+
+                                    echo "Boutique URL:" $frontend
+                                    echo "Grafana URL: "$grafana
+                                    echo "Prometheus URL: "$prom
+                              environmentVariables: []
+                              outputVariables:
+                                - name: boutique_prod_url
+                                  type: String
+                                  value: frontend
+                                - name: prometheus_url
+                                  type: String
+                                  value: prom
+                                - name: grafana_url
+                                  type: String
+                                  value: grafana
+                            timeout: 10m
+                    - step:
+                        name: Canary Delete
+                        identifier: canaryDelete
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                        when:
+                          stageStatus: All
+                        failureStrategies: []
+                  rollbackSteps:
+                    - step:
+                        name: Canary Delete
+                        identifier: rollbackCanaryDelete
+                        type: K8sCanaryDelete
+                        timeout: 10m
+                        spec: {}
+              - stepGroup:
+                  name: Primary Deployment
+                  identifier: primaryDepoyment
+                  steps:
+                    - step:
+                        name: Rolling Deployment
+                        identifier: rollingDeployment
+                        type: K8sRollingDeploy
+                        timeout: 10m
+                        spec:
+                          skipDryRun: false
+                        failureStrategies:
+                          - onFailure:
+                              errors:
+                                - AllErrors
+                              action:
+                                type: MarkAsSuccess
+                  rollbackSteps:
+                    - step:
+                        name: Rolling Rollback
+                        identifier: rollingRollback
+                        type: K8sRollingRollback
+                        timeout: 10m
+                        spec: {}
+            rollbackSteps:
+              - step:
+                  name: Canary Delete
+                  identifier: rollbackCanaryDelete
+                  type: K8sCanaryDelete
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Rolling Rollback
+                  identifier: rollingRollback
+                  type: K8sRollingRollback
+                  timeout: 10m
+                  spec: {}
+              - stepGroup:
+                  name: Database
+                  identifier: Database
+                  steps:
+                    - step:
+                        type: DBSchemaRollback
+                        name: DB Schema Rollback
+                        identifier: DB_Schema_Rollback
+                        spec:
+                          connectorRef: account.harnessImage
+                          dbSchema: Power_of_the_Platform
+                          dbInstance: POP_DB_DevOps_Prod_US
+                          tag: df23247d03fcc6953bc8511d064f8cec23c7a333
+                        timeout: 10m
+                  stepGroupInfra:
+                    type: KubernetesDirect
+                    spec:
+                      connectorRef: org.se_demo_k8s
+              - step:
+                  type: JiraUpdate
+                  name: Update Jira
+                  identifier: Update_Jira_Close
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    fields: []
+                  timeout: 1d
+              - stepGroup:
+                  name: Terraform CleanUp
+                  identifier: TF_CleanUp
+                  steps:
+                    - parallel:
+                        - step:
+                            type: TerraformDestroy
+                            name: TF Destroy AWS
+                            identifier: TF_Destroy_S3
+                            spec:
+                              provisionerIdentifier: popaws
+                              configuration:
+                                type: InheritFromApply
+                            timeout: 10m
+                        - step:
+                            type: TerraformDestroy
+                            name: TF Destroy Az
+                            identifier: TF_Destroy_AzBlob
+                            spec:
+                              provisionerIdentifier: popaz
+                              configuration:
+                                type: InheritFromApply
+                            timeout: 10m
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+          service:
+            serviceRef: org.Boutique_Frontend
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  artifacts:
+                    primary:
+                      primaryArtifactRef: <+input>
+                      sources: <+input>
+        tags: {}
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
+        when:
+          pipelineStatus: Success
+          condition: <+codebase.sourceBranch>=~ ".*-patch.*" || <+pipeline.variables.devonly> == "false"
+    - stage:
+        strategy:
+          parallelism: 4
+        name: Feature Experimentation
+        identifier: FF_Rollout
+        description: ""
+        type: FeatureFlag
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: JiraUpdate
+                  name: Update Feature Jira
+                  identifier: Update_FF_Rollouts
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    fields: []
+                  timeout: 10m
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: FlagConfiguration
+                  name: Serve Treatments
+                  identifier: Beta_Features
+                  spec:
+                    feature: New_Cart_AB_Test
+                    environment: qa
+                    instructions:
+                      - identifier: SetFeatureFlagStateIdentifier
+                        type: SetFeatureFlagState
+                        spec:
+                          state: "on"
+                  timeout: 10m
+                  strategy:
+                    parallelism: 3
+              - step:
+                  type: Wait
+                  name: Collect Feedback Data
+                  identifier: Collect_Feedback_Data
+                  spec:
+                    duration: 30s
+              - step:
+                  type: JiraApproval
+                  name: Approve GA Rollout
+                  identifier: Approve_Beta_move_to_GA_Rollouts
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    projectKey: HD
+                    issueType: Story
+                    retryInterval: 1m
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    approvalCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions:
+                          - key: Status
+                            operator: equals
+                            value: Dev Complete
+                    rejectionCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions: []
+                  timeout: 1d
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: FlagConfiguration
+                  name: Ten Percent
+                  identifier: Ten_Percent
+                  spec:
+                    feature: Zelle_Payment_Option
+                    environment: qa
+                    instructions:
+                      - spec:
+                          distribution:
+                            variations:
+                              - variation: "true"
+                                weight: 10
+                              - variation: "false"
+                                weight: 90
+                            clauses:
+                              - op: segmentMatch
+                                attribute: ""
+                                values:
+                                  - GA_User
+                            bucketBy: identifier
+                          priority: 100
+                        identifier: AddRuleIdentifier
+                        type: AddRule
+                  timeout: 10m
+              - step:
+                  type: Wait
+                  name: Guardrail Metrics
+                  identifier: Guardrail_Metrics
+                  spec:
+                    duration: 10s
+              - step:
+                  type: FlagConfiguration
+                  name: Fifty Percent
+                  identifier: Fifty_Percent
+                  spec:
+                    feature: Zelle_Payment_Option
+                    environment: qa
+                    instructions:
+                      - spec:
+                          distribution:
+                            variations:
+                              - variation: "true"
+                                weight: 50
+                              - variation: "false"
+                                weight: 50
+                            clauses:
+                              - op: segmentMatch
+                                attribute: ""
+                                values:
+                                  - GA_User
+                            bucketBy: identifier
+                          priority: 100
+                        identifier: AddRuleIdentifier
+                        type: AddRule
+                  timeout: 10m
+              - step:
+                  type: JiraApproval
+                  name: Full GA Rollout
+                  identifier: Finish_GA_Rollout
+                  spec:
+                    connectorRef: account.Harness_JIRA
+                    projectKey: HD
+                    issueType: Story
+                    retryInterval: 1m
+                    issueKey: <+pipeline.stages.Deploy_to_Dev.spec.execution.steps.Open_Jira_Ticket.issue.key>
+                    approvalCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions:
+                          - key: Status
+                            operator: equals
+                            value: Dev Complete
+                    rejectionCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: true
+                        conditions: []
+                  timeout: 1d
+                  when:
+                    stageStatus: Success
+              - step:
+                  type: FlagConfiguration
+                  name: Seventy-Five Percent
+                  identifier: SeventyFive_Percent
+                  spec:
+                    feature: Zelle_Payment_Option
+                    environment: qa
+                    instructions:
+                      - spec:
+                          distribution:
+                            variations:
+                              - variation: "true"
+                                weight: 75
+                              - variation: "false"
+                                weight: 25
+                            clauses:
+                              - op: segmentMatch
+                                attribute: ""
+                                values:
+                                  - GA_User
+                            bucketBy: identifier
+                          priority: 100
+                        identifier: AddRuleIdentifier
+                        type: AddRule
+                  timeout: 10m
+              - step:
+                  type: FlagConfiguration
+                  name: Full GA
+                  identifier: Full_GA
+                  spec:
+                    feature: Zelle_Payment_Option
+                    environment: qa
+                    instructions:
+                      - identifier: AddSegmentToVariationTargetMapIdentifier
+                        type: AddSegmentToVariationTargetMap
+                        spec:
+                          variation: "true"
+                          segments:
+                            - GA_User
+                  timeout: 10m
+        when:
+          pipelineStatus: Success
+          condition: "false"
+  variables:
+    - name: devonly
+      type: String
+      default: ""
+      value: <+input>.allowedValues(false,true)
+  allowStageExecutions: true

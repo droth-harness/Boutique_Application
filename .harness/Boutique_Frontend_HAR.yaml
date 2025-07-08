@@ -1,0 +1,42 @@
+service:
+  name: Boutique - Frontend - HAR - Old
+  identifier: Boutique_Frontend_HAR
+  orgIdentifier: demo
+  gitOpsEnabled: false
+  serviceDefinition:
+    type: Kubernetes
+    spec:
+      manifests:
+        - manifest:
+            identifier: manifests
+            type: K8sManifest
+            spec:
+              store:
+                type: Harness
+                spec:
+                  files:
+                    - org:/manifests/frontend-pop-har.yaml
+                    - org:/manifests/namespace.yaml
+              valuesPaths:
+                - org:/manifests/values.yaml
+              skipResourceVersioning: false
+              enableDeclarativeRollback: false
+      artifacts:
+        primary:
+          primaryArtifactRef: <+input>
+          sources:
+            - identifier: boutique
+              type: Har
+              spec:
+                registryRef: harness
+                type: docker
+                spec:
+                  digest: ""
+                  imagePath: boutique-frontend
+                  tag: 1.0.8
+      variables:
+        - name: cart_service_password
+          type: Secret
+          description: ""
+          required: false
+          value: org.Cart_Service_Password_Dev
