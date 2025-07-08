@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<OWASPZAPReport version="2.7.0" generated="2023.04.28.06.13.19">
+  <site name="test-shantanu">
+    <alerts>
+      <alertitem>
+        <pluginid>168bb74c-c558-58a8-a858-8af09dfe0b68</pluginid>
+        <alert>.env Information Leak By Checking if .env is accessible on http.request.path</alert>
+        <riskcode>2</riskcode>
+        <cweid>215</cweid>
+        <desc>Traceable identified a .env information leak vulnerability through which sensitive information such as server information, infrastructure details and server specific key-value pairs are exposed.\n</desc>
+        <solution>The file should not be accessible from an external API endpoint.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API7:Security Misconfiguration - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md\nOWASP Top 10 - 2021 \342\200\223 A05:Security Misconfiguration - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/\nOWASP Top 10 - 2017 - A6:Security Misconfiguration - https://owasp.org/www-project-top-ten/2017/A6_2017-Security_Misconfiguration\nCommon Weakness Enumeration (CWE) CWE-215:Insertion of Sensitive Information Into Debugging Code - https://cwe.mitre.org/data/definitions/215.html\nSANS TOP 25 - http://cwe.mitre.org/top25/\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-116:Excavation - https://capec.mitre.org/data/definitions/116.html\nMITRE Attack - T1213:Data from Information Repositories - https://attack.mitre.org/techniques/T1213/\nWeb Application Security Consortium - WASC-14:Server Misconfiguration - http://projects.webappsec.org/w/page/13246959/Server%20Misconfiguration\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/.env</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>46af32d1-167f-5cc9-ba95-fe1c0f4dc2bd</pluginid>
+        <alert>.env Information Leak By Checking if .env is accessible on http.request.path</alert>
+        <riskcode>2</riskcode>
+        <cweid>215</cweid>
+        <desc>Traceable identified a .env information leak vulnerability through which sensitive information such as server information, infrastructure details and server specific key-value pairs are exposed.\n</desc>
+        <solution>The file should not be accessible from an external API endpoint.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API7:Security Misconfiguration - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md\nOWASP Top 10 - 2021 \342\200\223 A05:Security Misconfiguration - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/\nOWASP Top 10 - 2017 - A6:Security Misconfiguration - https://owasp.org/www-project-top-ten/2017/A6_2017-Security_Misconfiguration\nCommon Weakness Enumeration (CWE) CWE-215:Insertion of Sensitive Information Into Debugging Code - https://cwe.mitre.org/data/definitions/215.html\nSANS TOP 25 - http://cwe.mitre.org/top25/\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-116:Excavation - https://capec.mitre.org/data/definitions/116.html\nMITRE Attack - T1213:Data from Information Repositories - https://attack.mitre.org/techniques/T1213/\nWeb Application Security Consortium - WASC-14:Server Misconfiguration - http://projects.webappsec.org/w/page/13246959/Server%20Misconfiguration\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/.env</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>0de833ea-b884-5ae3-9cad-58961a9d2100</pluginid>
+        <alert>Server Header Disclosure on http.request.url</alert>
+        <riskcode>0</riskcode>
+        <cweid>215</cweid>
+        <desc>The API reveals information about the software and version used by the origin server handling the request.\n</desc>
+        <solution>Remove the server header from the API response.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API7:Security Misconfiguration - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md\nOWASP Top 10 - 2021 \342\200\223 A05:Security Misconfiguration - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/\nOWASP Top 10 - 2017 - A6:Security Misconfiguration - https://owasp.org/www-project-top-ten/2017/A6_2017-Security_Misconfiguration\nCommon Weakness Enumeration (CWE) CWE-215:Insertion of Sensitive Information Into Debugging Code - https://cwe.mitre.org/data/definitions/215.html\nSANS TOP 25 - http://cwe.mitre.org/top25/\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-116:Excavation - https://capec.mitre.org/data/definitions/116.html\nMITRE Attack - T1213:Data from Information Repositories - https://attack.mitre.org/techniques/T1213/\nWeb Application Security Consortium - WASC-14:Server Misconfiguration - http://projects.webappsec.org/w/page/13246959/Server%20Misconfiguration\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/workshop/api/shop/orders/all</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>6bba76e6-ef73-50cb-9f50-cb554eb4d9bb</pluginid>
+        <alert>.env Information Leak By Checking if .env is accessible on http.request.path</alert>
+        <riskcode>2</riskcode>
+        <cweid>215</cweid>
+        <desc>Traceable identified a .env information leak vulnerability through which sensitive information such as server information, infrastructure details and server specific key-value pairs are exposed.\n</desc>
+        <solution>The file should not be accessible from an external API endpoint.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API7:Security Misconfiguration - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md\nOWASP Top 10 - 2021 \342\200\223 A05:Security Misconfiguration - https://owasp.org/Top10/A05_2021-Security_Misconfiguration/\nOWASP Top 10 - 2017 - A6:Security Misconfiguration - https://owasp.org/www-project-top-ten/2017/A6_2017-Security_Misconfiguration\nCommon Weakness Enumeration (CWE) CWE-215:Insertion of Sensitive Information Into Debugging Code - https://cwe.mitre.org/data/definitions/215.html\nSANS TOP 25 - http://cwe.mitre.org/top25/\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-116:Excavation - https://capec.mitre.org/data/definitions/116.html\nMITRE Attack - T1213:Data from Information Repositories - https://attack.mitre.org/techniques/T1213/\nWeb Application Security Consortium - WASC-14:Server Misconfiguration - http://projects.webappsec.org/w/page/13246959/Server%20Misconfiguration\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/.env</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>1812c525-302d-50d4-be6f-3aa6827ccb54</pluginid>
+        <alert>Excessive Data Exposure on http.request.url</alert>
+        <riskcode>2</riskcode>
+        <cweid>200</cweid>
+        <desc>The API returns sensitive data to the client by design. This data is usually filtered on the client side before being presented to the user. An attacker can easily sniff the traffic and see the sensitive data.\n</desc>
+        <solution>Review the responses from the API to make sure they contain only legitimate data. Classify sensitive and personally identifiable information (PII) that your application stores and works with, reviewing all API calls returning such information to see if these responses pose a security issue.\n</solution>
+        <reference>- https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure\n- https://owasp.org/Top10/A02_2021-Cryptographic_Failures/\n- https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa3-excessive-data-exposure.md\n- https://cwe.mitre.org/data/definitions/200.html  \n- https://capec.mitre.org/data/definitions/37.html\n- https://attack.mitre.org/techniques/T1190/\n- http://projects.webappsec.org/w/page/13246936/Information%20Leakage\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/community/api/v2/community/posts/recent</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>c7814b2e-c28e-5642-85df-64a0a1638fae</pluginid>
+        <alert>Excessive Data Exposure on http.request.url</alert>
+        <riskcode>2</riskcode>
+        <cweid>200</cweid>
+        <desc>The API returns sensitive data to the client by design. This data is usually filtered on the client side before being presented to the user. An attacker can easily sniff the traffic and see the sensitive data.\n</desc>
+        <solution>Review the responses from the API to make sure they contain only legitimate data. Classify sensitive and personally identifiable information (PII) that your application stores and works with, reviewing all API calls returning such information to see if these responses pose a security issue.\n</solution>
+        <reference>- https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure\n- https://owasp.org/Top10/A02_2021-Cryptographic_Failures/\n- https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa3-excessive-data-exposure.md\n- https://cwe.mitre.org/data/definitions/200.html  \n- https://capec.mitre.org/data/definitions/37.html\n- https://attack.mitre.org/techniques/T1190/\n- http://projects.webappsec.org/w/page/13246936/Information%20Leakage\n</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/community/api/v2/community/posts/dTWRUePDxbBRvhmn4dwobD</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>cbfeb413-baf0-5385-bdd0-eae313759240</pluginid>
+        <alert>UnAuthenticated Access by emptying attribute on http.request.header.authorization</alert>
+        <riskcode>3</riskcode>
+        <cweid>287</cweid>
+        <desc>Traceable identified an Unauthenticated Access vulnerability.\nAuthentication is the process of verifying that an individual, entity or website is whom it claims to be. Authentication in the context of web applications is commonly performed by submitting a username or ID and one or more items of private information that only a given user should know. Authentication mechanisms are often implemented incorrectly, allowing attackers to compromise authentication tokens or to exploit implementation flaws to assume other user\'s identities temporarily or permanently. Compromising system\'s ability to identify the client/user, compromises API security overall.\n</desc>
+        <solution>The best way to protect your code against Unauthenticated Access is to implement authentication checks and session management.\n- Use popular authentication libraries instead of architecting your own.\n- Rotate credentials regularly.\n- Expire session tokens in a short time.\n- Rate limit your authentication endpoints including registration, login, password recovery, session management etc.\n- Reauthenticate for critical operations.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API2:Broken User Authentication - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa2-broken-user-authentication.md\nOWASP Top 10 - 2021 - A7:Identification and Authentication Failures - https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/\nOWASP Top 10 - 2017 - A5:Broken Authentication  - https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication.html\nCommon Weakness Enumeration (CWE) - CWE-287:Improper Authentication - https://cwe.mitre.org/data/definitions/287.html\nSANS TOP 25 - http://cwe.mitre.org/top25/\nOWASP Authentication Cheat Sheet - https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-115:Authentication Bypass - https://capec.mitre.org/data/definitions/115.html\nMITRE Attack - T1190:Exploit Public-Facing Application - https://attack.mitre.org/techniques/T1190/\nWeb Application Security Consortium - WASC-01:Insufficient Authentication - http://projects.webappsec.org/w/page/13246939/Insufficient%20Authentication</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/workshop/api/shop/orders/18</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+      <alertitem>
+        <pluginid>5dfaa582-b053-57b9-b6d3-230f2e50a732</pluginid>
+        <alert>TLS Not Implemented on localhost:8888</alert>
+        <riskcode>1</riskcode>
+        <cweid>310</cweid>
+        <desc>Traceable identified there is no TLS support for the domain in test. \nTLS (Transport Layer Security) is a protocol that provides secure communication over the Internet and is used to encrypt communication between web browsers and web servers. If a web/API server does not support TLS, any communication with that server is not encrypted and can be intercepted by a malicious third party. This vulnerability can lead to data theft, account hijacking, and other security risks.\n</desc>
+        <solution>The best way to mitigate this vulnerability is to ensure that the web server is configured to support TLS. This can be done by ensuring that the web server is running a supported version of TLS, and that any webpages that require secure communication are enabled to use TLS. Additionally, web administrators should ensure that the server is regularly updated and that any vulnerabilities that may have been discovered are patched. Finally, web administrators should ensure that all sensitive data is encrypted using TLS before it is transmitted.\n</solution>
+        <reference>OWASP API Top 10 - 2019 - API7:2019 Security Misconfiguration - https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md\nOWASP Top 10 - 2021 - A02:2021 Cryptographic Failures - https://owasp.org/Top10/A02_2021-Cryptographic_Failures/\nOWASP Top 10 - 2017 - A3:2017 Sensitive Data Exposure - https://owasp.org/www-project-top-ten/2017/A3_2017-Sensitive_Data_Exposure\nCommon Weakness Enumeration (CWE) - CWE-310:Cryptographic Issues - https://cwe.mitre.org/data/definitions/310.html\nTransport Layer Protection Cheat Sheet - https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Protection_Cheat_Sheet.html\nCommon Attack Pattern Enumerations and Classifications (CAPEC) - CAPEC-217: Exploiting Incorrectly Configured SSL/TLS - https://capec.mitre.org/data/definitions/217.html\nMITRE ATT&amp;CK - T1573: Exploitation of Remote Services - https://attack.mitre.org/techniques/T1573/</reference>
+        <instances>
+          <instance>
+            <uri>http://localhost:8888/workshop/api/shop/orders/all</uri>
+            <method>GET</method>
+          </instance>
+        </instances>
+      </alertitem>
+    </alerts>
+  </site>
+</OWASPZAPReport>

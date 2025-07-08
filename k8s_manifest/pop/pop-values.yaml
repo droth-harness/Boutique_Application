@@ -1,0 +1,9 @@
+createNamespace: true
+namespace: <+infra.namespace>
+image: <+artifact.image>
+dockercfg: <+artifact.imagePullSecret>
+
+service_identifier: <+service.identifier>
+env_identifier: <+env.identifier>
+
+cart_service_password: <+serviceVariables.cart_service_password>

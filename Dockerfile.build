@@ -1,0 +1,17 @@
+FROM gradle:jdk8
+LABEL maintainer="Dan Flores <dan.flores@harness.io>"
+
+
+# Copy the source from the current directory to the Working Directory inside the container
+COPY . .
+
+# Build the Java server app
+RUN gradle build -x test -x rat
+
+# Expose default port for external communication
+EXPOSE 8888
+
+# Command to run the executable jar
+CMD [ "java -jar /bin/harness-3.4.0-SNAPSHOT.jar" ]
+
+

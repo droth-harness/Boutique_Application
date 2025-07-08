@@ -1,0 +1,344 @@
+databaseChangeLog:
+  - changeSet:
+      id: my.poc:1
+      author: my.poc
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - createTable:
+            tableName: person
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address1
+                  type: VARCHAR(50)
+              - column:
+                  name: address2
+                  type: VARCHAR(50)
+              - column:
+                  name: city
+                  type: VARCHAR(30)
+      rollback:
+        - dropTable:
+            tableName: person
+  - includeAll:
+      path: sql
+  - changeSet:
+      id: my.poc:2
+      author: my.poc
+      labels: tag_2 
+      context: example-context
+      comment: example comment
+      changes:
+        - createTable:
+            tableName: company
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: address1
+                  type: VARCHAR(50)
+              - column:
+                  name: address2
+                  type: VARCHAR(50)
+              - column:
+                  name: city
+                  type: VARCHAR(30)
+      rollback:
+        - dropTable:
+            tableName: company
+
+  - changeSet:
+      id: my.poc:3
+      author: my.poc
+      labels: tag_3 
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: country
+                  type: varchar(100)
+      rollback:
+        - dropColumn:
+            tableName: person
+            columnName: country
+
+  - changeSet:
+      id: my.poc:4
+      author: my.poc
+      labels: example-label
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: state
+                  type: varchar(10)
+      rollback:
+        - dropColumn:
+            tableName: person
+            columnName: state
+
+  - changeSet:
+      id: my.poc:5
+      author: my.poc
+      labels: tag_4 
+      context: example-context
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: zone
+                  type: varchar(10)
+      rollback:
+        - dropColumn:
+            tableName: person
+            columnName: zone
+
+  - changeSet:
+      id: my.poc:6
+      author: my.poc
+      labels: tag_5 
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: field1
+                  type: varchar(10)
+      rollback:
+        - dropColumn:
+            tableName: person
+            columnName: field1
+  - changeSet:
+      id: my.poc:7
+      author: my.poc
+      labels: tag_6 
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: field2
+                  type: varchar(4000)
+      rollback:
+        - dropColumn:
+            tableName: person
+            columnName: field2        
+  - changeSet:
+      id: satwell:11
+      author: satwell@harness.io
+      context: example-context
+      comment: I really want another column 
+      changes:
+        - addColumn:
+            tableName: person
+            columns:
+              - column:
+                  name: field6
+                  type: varchar(4000)
+  - changeSet:
+      id: my.poc:1000
+      author: my.poc
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - createTable:
+            tableName: pets
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: species
+                  type: VARCHAR(50)
+              - column:
+                  name: owner
+                  type: VARCHAR(50)
+      rollback:
+        - dropTable:
+            tableName: pets      
+  - changeSet:
+      id: satwell:12
+      author: satwell@harness.io
+      context: example-context
+      comment: I really want another column 
+      changes:
+        - addColumn:
+            tableName: pets
+            columns:
+              - column:
+                  name: breed
+                  type: varchar(4000)
+  - changeSet:
+      id: satwell:13
+      author: satwell@harness.io
+      context: example-context
+      comment: I really want another column 
+      changes:
+        - addColumn:
+            tableName: pets
+            columns:
+              - column:
+                  name: tail_length
+                  type: varchar(4000)
+  - changeSet:
+      id: satwell:14
+      author: satwell@harness.io
+      context: example-context
+      comment: I really want another column 
+      changes:
+        - addColumn:
+            tableName: pets
+            columns:
+              - column:
+                  name: paw_size
+                  type: varchar(4000)
+  - changeSet:
+      id: satwell:15
+      author: satwell@harness.io
+      context: example-context
+      comment: I really want another column 
+      changes:
+        - addColumn:
+            tableName: pets
+            columns:
+              - column:
+                  name: last_nail_trim_date
+                  type: varchar(4000)
+  - changeSet:
+      id: satwell:16
+      author: my.poc
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - createTable:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: id
+                  type: INT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: name
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: species
+                  type: VARCHAR(50)
+      rollback:
+        - dropTable:
+            tableName: wild_aniumals  
+  - changeSet:
+      id: satwell:17
+      author: satwell
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - createIndex:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: name
+            indexName: idx_wild_animals
+  - changeSet:
+      id: satwell:18
+      author: satwell
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - createIndex:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: species
+            indexName: idx_wild_animals_species
+  - changeSet:
+      id: satwell:19
+      author: satwell
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: aggression_level
+                  type: VARCHAR(50)
+        - createIndex:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: aggression_level
+            indexName: idx_wild_animals_aggression_level
+  - changeSet:
+      id: satwell:20-sql-rollback-separate-file
+      author: satwell
+      labels: tag_1 
+      changes:
+      -  sqlFile:
+           path:  examples/001.sql
+      rollback:
+      -  sqlFile:
+           path:  examples/rollback_001.sql   
+  - changeSet:
+      id: satwell:21
+      author: satwell
+      labels: tag_1 
+      context: example-context
+      comment: example comment
+      changes:
+        - addColumn:
+            tableName: wild_aniumals
+            columns:
+              - column:
+                  name: climate
+                  type: VARCHAR(50)                                    
