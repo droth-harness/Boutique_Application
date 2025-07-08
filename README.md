@@ -1,7 +1,4 @@
-# e2e-commercial-hosted
-
-## Copied on 10/08/2024 from: https://app.harness.io/ng/account/6_vVHzo9Qeu9fXvj-AcbCQ/all/code/orgs/default/projects/Power_of_the_Platform/repos/Boutique_Application
-
+# Github PR demo
 This repo combines the boutique application, helm guestbook, apache Kafka, and other services to highlight most of the Harness capabilities
 Mapping: 
 - Apache Kafka -> Test Intelligene: This application is extremely large. Without Harness TI, Builds can take several hours. With Harness, Builds take a a couple of minutes.
