@@ -6,7 +6,7 @@ Mapping:
 - Helm Guestbook -> GitOps
 
 
----------------------------------
+--------------------------------
 
 SEs to further elaborate and restructure this repo.
 IDP and other solutions exist in the platform demo (it has not been migrated to Gitness yet)
